@@ -1,0 +1,413 @@
+"""
+/***************************************************************************
+Name			 	 : Zoom plugin
+Description          : Zooms to a point when the user hits the button.
+Date                 : 19/Nov/13 
+copyright            : (C) 2013 by Dimitris Kavroudakis
+email                : onoma@in.gr 
+ ***************************************************************************/
+
+/***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
+"""
+# Import the PyQt and QGIS libraries
+from PyQt4.QtCore import * 
+from PyQt4.QtGui import *
+from qgis.core import *
+from PyQt4 import QtCore, QtGui
+# Initialize Qt resources from file resources.py
+import resources
+#import win32api
+
+# Import the code for the dialog
+from InventoryDialog import InventoryDialog
+from CountLandslidesDialog import CountLandslidesDialog
+from CalculateAreaDialog import CalculateAreaDialog
+from HighestPointsDialog import HighestPointsDialog
+from PolygonLengthDialog import PolygonLengthDialog
+from PolygonWidthDialog import PolygonWidthDialog
+from PrecipitationDialog import PrecipitationDialog
+from ResampleModisDialog import ResampleModisDialog
+from EarthquakeCatalogDialog import EarthquakeCatalogDialog
+from AiAreaDialog import AiAreaDialog
+from AiLandslideDialog import AiLandslideDialog
+
+class App: 
+    
+  #constants:
+  PATH_TO_PUBLIC_FOLDER = "D:/Uni/LandslideDB/public"
+  PATH_TO_ICON_FOLDER = PATH_TO_PUBLIC_FOLDER + "/icons/"
+  PATH_TO_TOPOMAP_LAYER = PATH_TO_PUBLIC_FOLDER + "/Topomap/topomap-100000.tif"
+  PATH_TO_MAPPING_UNITS_LAYER = PATH_TO_PUBLIC_FOLDER + "/MappingUnits/ws-units-3000-pp-pr.shp"
+  PATH_TO_GEOLOGY_LAYER = PATH_TO_PUBLIC_FOLDER + "/Geology/geological-units-pr-multipart.shp"
+  PATH_TO_FAULTS_LAYER = PATH_TO_PUBLIC_FOLDER + "/Faults/copy.shp"
+  PATH_TO_SLOPE_LAYER = PATH_TO_PUBLIC_FOLDER + "/Slope/slope-pr.tif"
+  PATH_TO_ASPECT_LAYER = PATH_TO_PUBLIC_FOLDER + "/Aspect/test.tif"
+  PATH_TO_YEROKHIN_MAP_LAYER = PATH_TO_PUBLIC_FOLDER + "/YerokhinMap/yerokhin-hazard-map-pr.shp"
+  PATH_TO_MULTITEMPORAL_INVENTORY_FOLDER = PATH_TO_PUBLIC_FOLDER + "/MultiTemporalInventory"
+  PATH_TO_MONTHLY_AVERAGE_FOLDER = PATH_TO_PUBLIC_FOLDER + "/Karadarya_precipitation"
+  PATH_TO_USGS_CATALOG = PATH_TO_PUBLIC_FOLDER + "/Earthquakes/usgs-cat.shp"
+  PATH_TO_KYRGYZ_CATALOG = PATH_TO_PUBLIC_FOLDER + "/Earthquakes/kg-cat.shp"
+
+  def __init__(self, iface):
+    # Save reference to the QGIS interface
+    self.iface = iface
+
+  def initGui(self):  
+    # Create action that will start plugin configuration
+    self.inventoryAction = QAction(QIcon(":/plugin/Zoomer/icon.png"), \
+        "Load landslide data", self.iface.mainWindow())
+    # connect the action to the run method
+    QObject.connect(self.inventoryAction, SIGNAL("activated()"), self.runInventory) 
+    
+    # Topomap action:
+    self.topomapAction = QAction(QIcon(":/plugin/Zoomer/icon.png"), \
+        "Load topographic map", self.iface.mainWindow())
+    # connect the action to the run method
+    QObject.connect(self.topomapAction, SIGNAL("activated()"), self.runTopomap) 
+    
+    #Mapping units action:
+    self.mappingUnitsAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Load mapping units", self.iface.mainWindow())
+    QObject.connect(self.mappingUnitsAction, SIGNAL("activated()"), self.runMappingUnits)
+        
+    #Count landslides action:
+    self.countLandslidesAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Count landslide events", self.iface.mainWindow())
+    QObject.connect(self.countLandslidesAction, SIGNAL("activated()"), self.runCountLandslides)
+    
+    #Calculate area action:
+    self.calculateAreaAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Calculate landslide area", self.iface.mainWindow())
+    QObject.connect(self.calculateAreaAction, SIGNAL("activated()"), self.runCalculateArea)
+    
+    #Highest points action:
+    self.highestPointsAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Highest points", self.iface.mainWindow())
+    QObject.connect(self.highestPointsAction, SIGNAL("activated()"), self.runHighestPoints)
+    
+    #Polygon length action:
+    self.polygonLengthAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Polygon length", self.iface.mainWindow())
+    QObject.connect(self.polygonLengthAction, SIGNAL("activated()"), self.runPolygonLength)
+    
+    #Polygon width action:
+    self.polygonWidthAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Polygon width", self.iface.mainWindow())
+    QObject.connect(self.polygonWidthAction, SIGNAL("activated()"), self.runPolygonWidth)
+    
+    #Geology action:
+    self.geologyAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Geology", self.iface.mainWindow())
+    QObject.connect(self.geologyAction, SIGNAL("activated()"), self.runGeology)
+    
+    #Faults action:
+    self.faultsAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Faults", self.iface.mainWindow())
+    QObject.connect(self.faultsAction, SIGNAL("activated()"), self.runFaults)
+    
+    #Slope action:
+    self.slopeAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Slope", self.iface.mainWindow())
+    QObject.connect(self.slopeAction, SIGNAL("activated()"), self.runSlope)
+    
+    #Aspect action:
+    self.aspectAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Aspect", self.iface.mainWindow())
+    QObject.connect(self.aspectAction, SIGNAL("activated()"), self.runAspect)
+    
+    #Yerokhin map action:
+    self.YerokhinMapAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Load map by Yerokhin", self.iface.mainWindow())
+    QObject.connect(self.YerokhinMapAction, SIGNAL("activated()"), self.runYerokhinMap)
+    
+    #Resample MODIS action:
+    self.resampleModisAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Zonal statistics for MODIS", self.iface.mainWindow())
+    QObject.connect(self.resampleModisAction, SIGNAL("activated()"), self.runResampleModis) 
+    
+    #Precipitation action:
+    self.precipitationAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Load monthly average", self.iface.mainWindow())
+    QObject.connect(self.precipitationAction, SIGNAL("activated()"), self.runPrecipitation) 
+    
+    #Earthquake catalog action:
+    self.earthquakeCatalogAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Load epicenters", self.iface.mainWindow())
+    QObject.connect(self.earthquakeCatalogAction, SIGNAL("activated()"), self.runEarthquakeCatalog) 
+    
+    #AI area action:
+    self.aiAreaAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Calculate AI for study area", self.iface.mainWindow())
+    QObject.connect(self.aiAreaAction, SIGNAL("activated()"), self.runAiArea) 
+    
+    #AI landslide action:
+    self.aiLandslideAction = QAction(QIcon(":/plugins/Zoomer/icon.png"), \
+        "Calculate AI for polygons", self.iface.mainWindow())
+    QObject.connect(self.aiLandslideAction, SIGNAL("activated()"), self.runAiLandslide) 
+    
+    # Add toolbar:
+    self.toolbar = self.iface.addToolBar("Landslide Plugin")
+    self.toolbar.setEnabled(True)
+    
+    #Add data button:
+    self.addDataButton = QToolButton()
+    self.addDataButton.setIcon(QIcon(self.PATH_TO_ICON_FOLDER + "IconPlus.png"))
+    self.addDataButton.setPopupMode(QToolButton.InstantPopup)
+    self.toolbar.addWidget(self.addDataButton)
+    self.addDataMenu = QMenu(self.iface.mainWindow())
+    self.addDataMenu.addAction("Add landslide data")
+    self.addDataMenu.addAction("Add raster data")
+    self.addDataMenu.addAction("Add mapping units")
+    self.addDataButton.setMenu(self.addDataMenu)
+    
+    #Inventory button:
+    self.inventoryButton = QToolButton()
+    self.inventoryButton.setIcon(QIcon(self.PATH_TO_ICON_FOLDER + "IconPolygon.png"))
+    self.inventoryButton.setPopupMode(QToolButton.InstantPopup)
+    self.toolbar.addWidget(self.inventoryButton)
+    self.inventoryMenu = QMenu(self.iface.mainWindow())
+    self.inventoryMenu.addAction(self.inventoryAction)
+    self.basemapMenu = QMenu("Load basemap")
+    self.inventoryMenu.addMenu(self.basemapMenu)
+    self.basemapMenu.addAction("Load raster data")
+    self.basemapMenu.addAction(self.topomapAction)
+    self.mappingUnitsMenu = QMenu("Mapping units")
+    self.inventoryMenu.addMenu(self.mappingUnitsMenu)
+    self.mappingUnitsMenu.addAction(self.mappingUnitsAction)
+    self.mappingUnitsMenu.addAction(self.countLandslidesAction)
+#    self.mappingUnitsMenu.addAction(self.calculateAreaAction)
+    self.mappingUnitsMenu.addAction(self.highestPointsAction)
+    self.mappingUnitsMenu.addAction(self.polygonLengthAction)
+    self.mappingUnitsMenu.addAction(self.polygonWidthAction)
+#    self.mappingUnitsMenu.addAction("Calculate average value from raster")
+#    self.mappingUnitsMenu.addAction("Calculate max value from raster")
+    self.inventoryButton.setMenu(self.inventoryMenu)
+      
+    #Susceptibility button:
+    self.susceptibilityButton = QToolButton()
+    self.susceptibilityButton.setIcon(QIcon(self.PATH_TO_ICON_FOLDER + "IconMap.png"))
+    self.susceptibilityButton.setPopupMode(QToolButton.InstantPopup)
+    self.toolbar.addWidget(self.susceptibilityButton)
+    self.susceptibilityMenu = QMenu(self.iface.mainWindow())
+    self.factorMenu = QMenu("Load pr. factor data")
+    self.susceptibilityMenu.addMenu(self.factorMenu)
+    self.factorMenu.addAction(self.geologyAction)
+    self.factorMenu.addAction(self.faultsAction)
+    self.factorMenu.addAction(self.slopeAction)
+    self.factorMenu.addAction(self.aspectAction)
+    self.susceptibilityMenu.addAction("Calculate susceptibility")
+    self.validationMenu = QMenu("Validation")
+    self.susceptibilityMenu.addMenu(self.validationMenu)
+    self.validationMenu.addAction(self.YerokhinMapAction)
+    self.validationMenu.addAction("Validate")
+    self.susceptibilityButton.setMenu(self.susceptibilityMenu)  
+     
+    #Trigger button:
+    self.triggerButton = QToolButton()
+    self.triggerButton.setIcon(QIcon(self.PATH_TO_ICON_FOLDER + "IconTime2.png"))
+    self.triggerButton.setPopupMode(QToolButton.InstantPopup)
+    self.toolbar.addWidget(self.triggerButton)
+    self.triggerMenu = QMenu(self.iface.mainWindow())
+    self.precipitationMenu = QMenu("Precipitation")
+    self.triggerMenu.addMenu(self.precipitationMenu)
+    self.precipitationMenu.addAction(self.precipitationAction)
+    self.snowMenu = QMenu("Snow")
+    self.snowMenu.addAction(self.resampleModisAction)
+    self.triggerMenu.addMenu(self.snowMenu)
+    self.earthquakesMenu = QMenu("Earthquakes")
+    self.triggerMenu.addMenu(self.earthquakesMenu)
+    self.earthquakesMenu.addAction(self.earthquakeCatalogAction)
+    self.earthquakesMenu.addAction(self.aiAreaAction)
+    self.earthquakesMenu.addAction(self.aiLandslideAction)
+    self.triggerButton.setMenu(self.triggerMenu)
+    
+
+  def unload(self):
+    # Remove the plugin menu item and icon
+    self.iface.removePluginMenu("&Z Landslide IS",self.inventoryAction)
+    self.iface.removeToolBarIcon(self.inventoryAction)
+    
+    self.iface.removeToolBarIcon(self.precipitationAction)
+    self.iface.removeToolBarIcon(self.geologyAction)
+
+  # run method that performs all the real work
+  def runInventory(self):   
+    
+    # create and show the dialog 
+    dlg = InventoryDialog(self.iface, self.PATH_TO_MULTITEMPORAL_INVENTORY_FOLDER) 
+    # show the dialog
+    dlg.show()
+    result = dlg.exec_()
+    
+    # See if OK was pressed
+    if result == 1: 
+      # do something useful (delete the line containing pass and
+      # substitute with your code
+      pass 
+  
+  #run method for aspect dialog:
+  def runTopomap(self):
+    fileName = self.PATH_TO_TOPOMAP_LAYER
+    fileInfo = QFileInfo(fileName)
+    baseName = fileInfo.baseName()
+    rlayer = QgsRasterLayer(fileName, baseName)
+    QgsMapLayerRegistry.instance().addMapLayer(rlayer)
+  
+  #run method for load mapping units dialog:
+  def runMappingUnits(self):
+    vl = QgsVectorLayer(self.PATH_TO_MAPPING_UNITS_LAYER, "Mapping units", "ogr")
+    QgsMapLayerRegistry.instance().addMapLayer(vl)
+    
+    
+  #run method to calculate landslide area for each mapping unit:
+  def runCountLandslides(self):
+    dlg = CountLandslidesDialog(self.iface, self.PATH_TO_MAPPING_UNITS_LAYER) #FIXME
+    #show the dialog
+    dlg.show()
+    result = dlg.exec_()
+    
+    # See if OK was pressed
+    if result == 1: 
+      # do something useful (delete the line containing pass and
+      # substitute with your code
+      pass   
+      
+  #run method to calculate landslide area for each mapping unit:
+  def runCalculateArea(self):
+    dlg = CalculateAreaDialog(self.iface, self.PATH_TO_MAPPING_UNITS_LAYER) #FIXME
+    #show the dialog
+    dlg.show()
+    result = dlg.exec_()
+    
+    # See if OK was pressed
+    if result == 1: 
+      # do something useful (delete the line containing pass and
+      # substitute with your code
+      pass             
+      
+  #run method to calculate landslide area for each mapping unit:
+  def runHighestPoints(self):
+    dlg = HighestPointsDialog(self.iface, self.PATH_TO_MAPPING_UNITS_LAYER) #FIXME
+    #show the dialog
+    dlg.show()
+    result = dlg.exec_()
+    
+    # See if OK was pressed
+    if result == 1: 
+      # do something useful (delete the line containing pass and
+      # substitute with your code
+      pass   
+  
+  #run method to calculate polygon length:
+  def runPolygonLength(self):
+    dlg = PolygonLengthDialog(self.iface, self.PATH_TO_MAPPING_UNITS_LAYER) #FIXME
+    #show the dialog
+    dlg.show()
+    result = dlg.exec_()
+    
+    # See if OK was pressed
+    if result == 1: 
+      # do something useful (delete the line containing pass and
+      # substitute with your code
+      pass 
+
+  #run method to calculate polygon width:
+  def runPolygonWidth(self):
+    dlg = PolygonWidthDialog(self.iface, self.PATH_TO_MAPPING_UNITS_LAYER) #FIXME
+    #show the dialog
+    dlg.show()
+    result = dlg.exec_()
+    
+    # See if OK was pressed
+    if result == 1: 
+      # do something useful (delete the line containing pass and
+      # substitute with your code
+      pass 
+
+
+
+  #run method for geology dialog:
+  def runGeology(self):
+      vl = QgsVectorLayer(self.PATH_TO_GEOLOGY_LAYER, "Geology", "ogr")
+      QgsMapLayerRegistry.instance().addMapLayer(vl)
+      
+  #run method for faults dialog:
+  def runFaults(self):
+      vl = QgsVectorLayer(self.PATH_TO_FAULTS_LAYER, "Faults", "ogr")
+      QgsMapLayerRegistry.instance().addMapLayer(vl)     
+
+       
+  #run method for aspect dialog:
+  def runSlope(self):
+    fileName = self.PATH_TO_SLOPE_LAYER
+    fileInfo = QFileInfo(fileName)
+    baseName = fileInfo.baseName()
+    rlayer = QgsRasterLayer(fileName, baseName)
+    QgsMapLayerRegistry.instance().addMapLayer(rlayer)
+
+   
+  #run method for aspect dialog:
+  def runAspect(self):
+    fileName = self.PATH_TO_ASPECT_LAYER
+    fileInfo = QFileInfo(fileName)
+    baseName = fileInfo.baseName()
+    rlayer = QgsRasterLayer(fileName, baseName)
+    QgsMapLayerRegistry.instance().addMapLayer(rlayer)
+
+
+  #run method for Yerokhin map dialog:
+  def runYerokhinMap(self):
+      vl = QgsVectorLayer(self.PATH_TO_YEROKHIN_MAP_LAYER, "Map by Yerokhin", "ogr")
+      QgsMapLayerRegistry.instance().addMapLayer(vl)
+
+  #run method for resample MODIS dialog:
+  def runResampleModis(self):
+      dlg = ResampleModisDialog(self.iface, self.PATH_TO_MONTHLY_AVERAGE_FOLDER)
+      dlg.show()
+      result = dlg.exec_()
+      if result == 1:
+          #do something useful
+          pass
+
+  #run method for precipitation dialog:
+  def runPrecipitation(self):
+      dlg = PrecipitationDialog(self.iface, self.PATH_TO_MONTHLY_AVERAGE_FOLDER)
+      dlg.show()
+      result = dlg.exec_()
+      if result == 1:
+          #do something useful
+          pass
+    
+  #run method for earthquake catalog dialog:
+  def runEarthquakeCatalog(self):
+      dlg = EarthquakeCatalogDialog(self.iface, self.PATH_TO_USGS_CATALOG, self.PATH_TO_KYRGYZ_CATALOG)
+      dlg.show()
+      result = dlg.exec_()
+      if result == 1:
+          #do something useful
+          pass 
+      
+  #run method for AI area dialog:
+  def runAiArea(self):
+      dlg = AiAreaDialog(self.iface, self.PATH_TO_USGS_CATALOG, self.PATH_TO_KYRGYZ_CATALOG)
+      dlg.show()
+      result = dlg.exec_()
+      if result == 1:
+          #do something useful
+          pass 
+      
+  #run method for AI landslide dialog:
+  def runAiLandslide(self):
+      dlg = AiLandslideDialog(self.iface, self.PATH_TO_USGS_CATALOG, self.PATH_TO_KYRGYZ_CATALOG)
+      dlg.show()
+      result = dlg.exec_()
+      if result == 1:
+          #do something useful
+          pass 
