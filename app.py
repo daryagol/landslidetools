@@ -29,6 +29,7 @@ import tempfile
 # Import the code for the dialog
 from CountLandslidesDialog import CountLandslidesDialog
 from HighestPointsDialog import HighestPointsDialog
+from HighestPercentDialog import HighestPercentDialog
 from PolygonLengthDialog import PolygonLengthDialog
 from PolygonWidthDialog import PolygonWidthDialog
 from ResampleModisDialog import ResampleModisDialog
@@ -54,6 +55,11 @@ class App:
     self.highestPointsAction = QAction(QIcon(), \
         "Highest points", self.iface.mainWindow())
     QObject.connect(self.highestPointsAction, SIGNAL("activated()"), self.runHighestPoints)
+
+	#Highest percent action:
+    self.highestPercentAction = QAction(QIcon(), \
+        "Highest N percent", self.iface.mainWindow())
+    QObject.connect(self.highestPercentAction, SIGNAL("activated()"), self.runHighestPercent)
     
     #Polygon length action:
     self.polygonLengthAction = QAction(QIcon(), \
@@ -77,6 +83,7 @@ class App:
 
     self.iface.addPluginToMenu("Landslide Tools", self.countLandslidesAction)
     self.iface.addPluginToMenu("Landslide Tools", self.highestPointsAction)
+    self.iface.addPluginToMenu("Landslide Tools", self.highestPercentAction)
     self.iface.addPluginToMenu("Landslide Tools", self.polygonLengthAction)
     self.iface.addPluginToMenu("Landslide Tools", self.polygonWidthAction)
     self.iface.addPluginToMenu("Landslide Tools", self.resampleModisAction)
@@ -86,6 +93,7 @@ class App:
     # Remove the plugin menu item and icon
     self.iface.removePluginMenu("Landslide Tools",self.countLandslidesAction)
     self.iface.removePluginMenu("Landslide Tools", self.highestPointsAction)
+    self.iface.removePluginMenu("Landslide Tools",self.highestPercentAction)
     self.iface.removePluginMenu("Landslide Tools", self.polygonLengthAction)
     self.iface.removePluginMenu("Landslide Tools", self.polygonWidthAction)
     self.iface.removePluginMenu("Landslide Tools", self.resampleModisAction)
@@ -105,7 +113,7 @@ class App:
       pass   
         
       
-  #run method to calculate landslide area for each mapping unit:
+  #run method to calculate landslide highest points:
   def runHighestPoints(self):
     dlg = HighestPointsDialog(self.iface, self.PATH_TO_TEMP_FOLDER)
     #show the dialog
@@ -115,6 +123,17 @@ class App:
     # See if OK was pressed
     if result == 1: 
       pass   
+
+  #run method to calculate the top N percent of a landslide:
+  def runHighestPercent(self):
+    dlg = HighestPercentDialog(self.iface, self.PATH_TO_TEMP_FOLDER)
+    #show the dialog
+    dlg.show()
+    result = dlg.exec_()
+    
+    # See if OK was pressed
+    if result == 1: 
+      pass  
   
   #run method to calculate polygon length:
   def runPolygonLength(self):

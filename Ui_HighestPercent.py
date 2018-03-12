@@ -35,31 +35,32 @@ except AttributeError:
     def _translate(context, text, disambig):
         return QtGui.QApplication.translate(context, text, disambig)
 
-class Ui_HighestPoints(object):
+class Ui_HighestPercent(object):
 
     #class variables:
     landslideCombobox = None
     idCombobox = None
     demCombobox = None
-    outsideCheckbox = None
+    outputField = None
+    portionField = None
     dialog = None
     
-    def setupUi(self, HighestPointsDialog):
-        HighestPointsDialog.setObjectName(_fromUtf8("Highest points"))
-        HighestPointsDialog.resize(400, 300)
+    def setupUi(self, HighestPercentDialog):
+        HighestPercentDialog.setObjectName(_fromUtf8("Highest points"))
+        HighestPercentDialog.resize(400, 300)
         
         mainLayout = QtGui.QVBoxLayout()
-        HighestPointsDialog.setLayout(mainLayout)
+        HighestPercentDialog.setLayout(mainLayout)
         
-        self.dialog = HighestPointsDialog
+        self.dialog = HighestPercentDialog
 
         # for selecting the layer with landslide polygons:
         horizontalLayoutLandslide = QtGui.QHBoxLayout()
-        landslideLabel = QtGui.QLabel("Select landslide layer:", HighestPointsDialog)
+        landslideLabel = QtGui.QLabel("Select landslide layer:", HighestPercentDialog)
         horizontalLayoutLandslide.addWidget(landslideLabel)
         self.landslideCombobox = QtGui.QComboBox()
         self.landslideCombobox.setMaximumWidth(210)
-        openLayers = HighestPointsDialog.getOpenMapLayers()
+        openLayers = HighestPercentDialog.getOpenMapLayers()
         for layer in openLayers.values():
             layerType = layer.type()
             if layerType == QgsMapLayer.VectorLayer:
@@ -74,7 +75,7 @@ class Ui_HighestPoints(object):
         
         # for selecting the id field of the landslide layer:
         horizontalLayoutId = QtGui.QHBoxLayout()
-        idLabel = QtGui.QLabel("Select the attribute to be used as ID:", HighestPointsDialog)
+        idLabel = QtGui.QLabel("Select the attribute to be used as ID:", HighestPercentDialog)
         horizontalLayoutId.addWidget(idLabel)
         self.idCombobox = QtGui.QComboBox()
         self.idCombobox.setMaximumWidth(210)
@@ -84,7 +85,7 @@ class Ui_HighestPoints(object):
 
         # for selecting the DEM layer:
         horizontalLayoutDem = QtGui.QHBoxLayout()
-        demLabel = QtGui.QLabel("Select DEM layer:", HighestPointsDialog)
+        demLabel = QtGui.QLabel("Select DEM layer:", HighestPercentDialog)
         horizontalLayoutDem.addWidget(demLabel)
         self.demCombobox = QtGui.QComboBox()
         self.demCombobox.setMaximumWidth(210)
@@ -97,30 +98,46 @@ class Ui_HighestPoints(object):
         selectButtonDem.clicked.connect(self.showDialogDem)
         horizontalLayoutDem.addWidget(selectButtonDem)
         mainLayout.addLayout(horizontalLayoutDem)
+
+        # for selecting the output file:
+        horizontalLayoutOutput = QtGui.QHBoxLayout()
+        outputLabel = QtGui.QLabel("Output file (*.shp): ", HighestPercentDialog)
+        horizontalLayoutOutput.addWidget(outputLabel)
+        self.outputField = QtGui.QLineEdit()
+        self.outputField.setText("")
+        horizontalLayoutOutput.addWidget(self.outputField)
+        outputButton = QtGui.QPushButton(_fromUtf8("select"), None)
+        outputButton.setMaximumWidth(60)
+        outputButton.clicked.connect(self.writeToFile)
+        horizontalLayoutOutput.addWidget(outputButton)
+        mainLayout.addLayout(horizontalLayoutOutput)
         
-        # parameter whether the highest point may be outside the landslide polygons
-        horizontalLayoutOutside = QtGui.QHBoxLayout()
-        self.outsideCheckbox = QtGui.QCheckBox("Allow highest points outside the landslide polygon")
-        horizontalLayoutOutside.addWidget(self.outsideCheckbox)
-        mainLayout.addLayout(horizontalLayoutOutside)
+        # parameter to define what percentage should be selected:
+        horizontalLayoutPercentage = QtGui.QHBoxLayout()
+        percentageLabel = QtGui.QLabel("What portion of the polygon area should be selected (e.g. 1/4, 1/10)?               1/")
+        horizontalLayoutPercentage.addWidget(percentageLabel)
+        self.portionField = QtGui.QLineEdit(HighestPercentDialog)
+        self.portionField.setText("4")
+        horizontalLayoutPercentage.addWidget(self.portionField)
+        mainLayout.addLayout(horizontalLayoutPercentage)
         
-	# add a dummy label for a better styling:
-        dummyLabel = QtGui.QLabel("", HighestPointsDialog)
+	    # add a dummy label for a better styling:
+        dummyLabel = QtGui.QLabel("", HighestPercentDialog)
         mainLayout.addWidget(dummyLabel)        
         
-        self.buttonBox = QtGui.QDialogButtonBox(HighestPointsDialog)
+        self.buttonBox = QtGui.QDialogButtonBox(HighestPercentDialog)
         self.buttonBox.setGeometry(QtCore.QRect(30, 240, 341, 32))
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
         self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Cancel|QtGui.QDialogButtonBox.Ok)
         self.buttonBox.setObjectName(_fromUtf8("buttonBox"))
 
-        self.retranslateUi(HighestPointsDialog)
-        QtCore.QObject.connect(self.buttonBox, QtCore.SIGNAL(_fromUtf8("accepted()")), HighestPointsDialog.accept)
-        QtCore.QObject.connect(self.buttonBox, QtCore.SIGNAL(_fromUtf8("rejected()")), HighestPointsDialog.reject)
-        QtCore.QMetaObject.connectSlotsByName(HighestPointsDialog)
+        self.retranslateUi(HighestPercentDialog)
+        QtCore.QObject.connect(self.buttonBox, QtCore.SIGNAL(_fromUtf8("accepted()")), HighestPercentDialog.accept)
+        QtCore.QObject.connect(self.buttonBox, QtCore.SIGNAL(_fromUtf8("rejected()")), HighestPercentDialog.reject)
+        QtCore.QMetaObject.connectSlotsByName(HighestPercentDialog)
 
-    def retranslateUi(self, HighestPointsDialog):
-        HighestPointsDialog.setWindowTitle(_translate("Highest points", "Highest points", None))
+    def retranslateUi(self, HighestPercentDialog):
+        HighestPercentDialog.setWindowTitle(_translate("Highest 25 percent", "Highest 25 percent", None))
     
     def showDialogLandslide(self):
         fileNameLandslide = QtGui.QFileDialog.getOpenFileName(None, "Open file", None, "Shapefiles (*.shp)")
@@ -144,6 +161,11 @@ class Ui_HighestPoints(object):
         if landslideLayer:
 	  for i in range (0, landslideLayer.fields().size()):
 	    self.idCombobox.addItem(landslideLayer.fields().at(i).name())
+
+    def writeToFile(self):
+        path = None
+        outputFileName = QtGui.QFileDialog.getSaveFileName(None, "Save as", path, filter = "*.shp")
+        self.outputField.setText(outputFileName)
     
     def getSelectedLandslideLayer(self):
             text = self.landslideCombobox.currentText()
@@ -173,8 +195,14 @@ class Ui_HighestPoints(object):
 	      path = layer.dataProvider().dataSourceUri()
 	return path
       
-    def getOutsideCheckbox(self):
-	return self.outsideCheckbox
+    def getPortionField(self):
+	   return self.portionField.text()
+
+    def getOutputField(self):
+        if self.outputField.text().endswith(".shp"):
+           return self.outputField.text()
+        else:
+           return self.outputField.text() + ".shp"
       
 
       

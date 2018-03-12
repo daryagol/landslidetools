@@ -52,7 +52,8 @@ class HighestPointsDialog(QtGui.QDialog):
   def accept(self):   
 
     landslides = self.ui.getSelectedLandslideLayer()
-    dem = self.ui.getSelectedDemLayer()
+    demPath = self.ui.getSelectedDemLayer()
+    dem = gdal.Open(demPath)
     if landslides is None or dem is None:
       return
     demBand = dem.GetRasterBand(1)
@@ -97,7 +98,8 @@ class HighestPointsDialog(QtGui.QDialog):
 	if self.ui.getOutsideCheckbox().isChecked():
 	  outside = ' -at '
 
-        command = 'gdal_rasterize' + outside + '-burn 1 -tr ' + str(demPixelWidth) + ' ' + str(demPixelHeight) + ' ' + singleFeatureVectorLayerFileName + ' ' + intermediateResultsFolderName + 'rasterized.tif'
+        #command = 'gdal_rasterize' + outside + '-burn 1 -tr ' + str(demPixelWidth) + ' ' + str(demPixelHeight) + ' ' + singleFeatureVectorLayerFileName + ' ' + intermediateResultsFolderName + 'rasterized.tif'
+	command = 'gdalwarp -q -cutline ' + singleFeatureVectorLayerFileName + ' -crop_to_cutline -tr ' +  str(demPixelWidth) + ' ' + str(demPixelHeight) + ' -of GTiff ' + demPath + ' ' + intermediateResultsFolderName + 'rasterized.tif'
 	os.system(command)
 
         pathToClippedRaster = intermediateResultsFolderName + "rasterized.tif"
@@ -121,16 +123,16 @@ class HighestPointsDialog(QtGui.QDialog):
 
             for col in range(0, cols):
                 for row in range(0, rows):
-                    if data[row, col] == 1:
+                    if data[row, col] != 0:
                         pixelCenterX = originX + col * pixelWidth + 0.5 * pixelWidth
                         pixelCenterY = originY + row * pixelHeight - 0.5 * pixelWidth
                         demXOffset = int((pixelCenterX - demOriginX) / demPixelWidth)
                         demYOffset = int((pixelCenterY - demOriginY) / demPixelHeight)
                         heightValue = demBand.ReadAsArray(demXOffset, demYOffset, 1, 1)
+                        
                         if heightValue > maxHeight:
                             maxHeight = heightValue
                             maxHeightIndices = [pixelCenterX, pixelCenterY]
-
         
             if maxHeight != -1:
                 highestPoint = QgsFeature()
