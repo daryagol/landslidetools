@@ -53,6 +53,8 @@ class HighestPointsDialog(QtGui.QDialog):
 
     landslides = self.ui.getSelectedLandslideLayer()
     demPath = self.ui.getSelectedDemLayer()
+    if demPath == None: 
+       return
     dem = gdal.Open(demPath)
     if landslides is None or dem is None:
       return

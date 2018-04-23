@@ -22,6 +22,5 @@
 """
 
 def classFactory(iface):
-    # load Zoomer class from file Zoomer
     from app import App
     return App(iface)

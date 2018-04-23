@@ -27,6 +27,7 @@ import tempfile
 
 
 # Import the code for the dialog
+from RemoveSelfTangencyDialog import RemoveSelfTangencyDialog
 from CountLandslidesDialog import CountLandslidesDialog
 from HighestPointsDialog import HighestPointsDialog
 from HighestPercentDialog import HighestPercentDialog
@@ -45,6 +46,11 @@ class App:
     self.iface = iface
 
   def initGui(self):  
+
+    #Remove self-tangency action:
+    self.removeSelfTangencyAction = QAction(QIcon(), \
+    "Remove self-tangency", self.iface.mainWindow())
+    QObject.connect(self.removeSelfTangencyAction, SIGNAL("activated()"), self.runRemoveSelfTangency)
             
     #Count landslides action:
     self.countLandslidesAction = QAction(QIcon(), \
@@ -81,6 +87,7 @@ class App:
         "Calculate Arias intensity for study area", self.iface.mainWindow())
     QObject.connect(self.aiAreaAction, SIGNAL("activated()"), self.runAiArea) 
 
+    self.iface.addPluginToMenu("Landslide Tools", self.removeSelfTangencyAction)
     self.iface.addPluginToMenu("Landslide Tools", self.countLandslidesAction)
     self.iface.addPluginToMenu("Landslide Tools", self.highestPointsAction)
     self.iface.addPluginToMenu("Landslide Tools", self.highestPercentAction)
@@ -91,7 +98,8 @@ class App:
 
   def unload(self):
     # Remove the plugin menu item and icon
-    self.iface.removePluginMenu("Landslide Tools",self.countLandslidesAction)
+    self.iface.removePluginMenu("Landslide Tools", self.removeSelfTangencyAction)
+    self.iface.removePluginMenu("Landslide Tools", self.countLandslidesAction)
     self.iface.removePluginMenu("Landslide Tools", self.highestPointsAction)
     self.iface.removePluginMenu("Landslide Tools",self.highestPercentAction)
     self.iface.removePluginMenu("Landslide Tools", self.polygonLengthAction)
@@ -99,7 +107,16 @@ class App:
     self.iface.removePluginMenu("Landslide Tools", self.resampleModisAction)
     self.iface.removePluginMenu("Landslide Tools", self.aiAreaAction)
 
-
+  #run method to remove self-tangency from polygons (for automatically detected landslides):
+  def runRemoveSelfTangency(self):
+    dlg = RemoveSelfTangencyDialog()
+    #show the dialog
+    dlg.show()
+    result = dlg.exec_()
+    
+    # See if OK was pressed
+    if result == 1: 
+      pass  
     
   #run method to calculate landslide area for each mapping unit:
   def runCountLandslides(self):
@@ -156,7 +173,6 @@ class App:
     # See if OK was pressed
     if result == 1: 
       pass 
-
 
 
   #run method for resample MODIS dialog:

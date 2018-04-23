@@ -162,19 +162,19 @@ class Ui_HighestPoints(object):
       return self.idCombobox.currentText()
 	 
     def getSelectedDemLayer(self):
-	text = self.demCombobox.currentText()
-	demLayer = None
-	if text.endswith(".tif") or text.endswith(".tiff") or text.endswith(".img") or text.endswith(".gif") or text.endswith(".bmp"):
-	  demLayer = gdal.Open(text)	  
-	else:
-	  openLayers = self.dialog.getOpenMapLayers()
-	  for layer in openLayers.values():
-	    if (layer.name() == text):
-	      path = layer.dataProvider().dataSourceUri()
-	return path
+      path = None
+      text = self.demCombobox.currentText()
+      if text.endswith(".tif") or text.endswith(".tiff") or text.endswith(".img") or text.endswith(".gif") or text.endswith(".bmp"):
+         path = text
+      else:
+	     openLayers = self.dialog.getOpenMapLayers()
+	     for layer in openLayers.values():
+	        if (layer.name() == text):
+	           path = layer.dataProvider().dataSourceUri()
+      return path
       
     def getOutsideCheckbox(self):
-	return self.outsideCheckbox
+	  return self.outsideCheckbox
       
 
       
