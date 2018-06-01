@@ -16,6 +16,10 @@ email                : dgolovko at gfz-potsdam.de
  *                                                                         *
  ***************************************************************************/
 """
+
+# Last tested with QGIS 2.18.16
+
+
 from PyQt4 import *
 from PyQt4.QtCore import *
 from qgis.core import *
@@ -41,7 +45,6 @@ class Ui_HighestPoints(object):
     landslideCombobox = None
     idCombobox = None
     demCombobox = None
-    outsideCheckbox = None
     dialog = None
     
     def setupUi(self, HighestPointsDialog):
@@ -97,12 +100,6 @@ class Ui_HighestPoints(object):
         selectButtonDem.clicked.connect(self.showDialogDem)
         horizontalLayoutDem.addWidget(selectButtonDem)
         mainLayout.addLayout(horizontalLayoutDem)
-        
-        # parameter whether the highest point may be outside the landslide polygons
-        horizontalLayoutOutside = QtGui.QHBoxLayout()
-        self.outsideCheckbox = QtGui.QCheckBox("Allow highest points outside the landslide polygon")
-        horizontalLayoutOutside.addWidget(self.outsideCheckbox)
-        mainLayout.addLayout(horizontalLayoutOutside)
         
 	# add a dummy label for a better styling:
         dummyLabel = QtGui.QLabel("", HighestPointsDialog)
@@ -173,8 +170,4 @@ class Ui_HighestPoints(object):
 	           path = layer.dataProvider().dataSourceUri()
       return path
       
-    def getOutsideCheckbox(self):
-	  return self.outsideCheckbox
-      
-
       

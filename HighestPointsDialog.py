@@ -1,10 +1,10 @@
 """
 /***************************************************************************
 Name		     : LandslideTools plugin
-Description          : Spatial funtionality for landslide studies
-copyright            : GNU General Public License
+Description      : Spatial funtionality for landslide studies
+copyright        : GNU General Public License
 author		     : Darya Golovko
-email                : dgolovko at gfz-potsdam.de
+email            : dgolovko at gfz-potsdam.de
  ***************************************************************************/
 
 /***************************************************************************
@@ -16,6 +16,9 @@ email                : dgolovko at gfz-potsdam.de
  *                                                                         *
  ***************************************************************************/
 """
+
+# Last tested with QGIS 2.18.16
+
 from PyQt4 import *
 from Ui_HighestPoints import Ui_HighestPoints
 from glob import glob
@@ -27,6 +30,7 @@ from osgeo import ogr
 import osr
 import shutil
 import time
+import sys, traceback
 
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
@@ -95,72 +99,96 @@ class HighestPointsDialog(QtGui.QDialog):
         fet.setGeometry(landslide.geometry())
         singleFeatureVectorLayer.dataProvider().addFeatures([fet])
         QgsVectorFileWriter.writeAsVectorFormat(singleFeatureVectorLayer, singleFeatureVectorLayerFileName, "CP1250", None, "ESRI Shapefile")
-    
-	outside = ' '
-	if self.ui.getOutsideCheckbox().isChecked():
-	  outside = ' -at '
 
-        #command = 'gdal_rasterize' + outside + '-burn 1 -tr ' + str(demPixelWidth) + ' ' + str(demPixelHeight) + ' ' + singleFeatureVectorLayerFileName + ' ' + intermediateResultsFolderName + 'rasterized.tif'
-	command = 'gdalwarp -q -cutline ' + singleFeatureVectorLayerFileName + ' -crop_to_cutline -tr ' +  str(demPixelWidth) + ' ' + str(demPixelHeight) + ' -of GTiff ' + demPath + ' ' + intermediateResultsFolderName + 'rasterized.tif'
-	os.system(command)
+        # get the boundaries to correctly crop the dem layer without shifts:
+        # code from: https://gis.stackexchange.com/questions/186491/gdalwarp-causing-shift-in-pixels?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+        singleFeatureLayerOgr = ogr.Open(singleFeatureVectorLayerFileName)
+        layerOgr = singleFeatureLayerOgr.GetLayer(0)
+        layerOgr.ResetReading()
+        singleFeatureOgr = layerOgr.GetNextFeature()
+        geometryOgr = singleFeatureOgr.GetGeometryRef()
+        minx, maxx, miny, maxy = geometryOgr.GetEnvelope()
+        # compute the pixel-aligned bounding box (larger than the feature's bbox)
+        left = minx - (minx - demOriginX) % demPixelWidth
+        right = maxx + (demPixelWidth - ((maxx - demOriginX) % demPixelWidth))
+        bottom = miny + (demPixelHeight - ((miny - demOriginY) % demPixelHeight))
+        top = maxy - (maxy - demOriginY) % demPixelHeight
+
+        command = 'gdalwarp -overwrite -q -cutline ' + singleFeatureVectorLayerFileName + ' -tr ' + str(demPixelWidth) + ' ' + str(demPixelHeight) + ' -of GTiff ' + demPath + ' ' + intermediateResultsFolderName + 'rasterized.tif -wo CUTLINE_ALL_TOUCHED=TRUE -te ' + str(left) + ' ' + str(bottom) + ' ' + str(right) + ' ' + str(top)# -crop_to_cutline' 
+        os.system(command)
 
         pathToClippedRaster = intermediateResultsFolderName + "rasterized.tif"
         maskedRaster = gdal.Open(pathToClippedRaster)
 
-        try:
+        inputBand = maskedRaster.GetRasterBand(1)
 
-            inputBand = maskedRaster.GetRasterBand(1)
-            
-            cols = maskedRaster.RasterXSize
-            rows = maskedRaster.RasterYSize       
-            data = inputBand.ReadAsArray(0, 0, cols, rows)
-            transform = maskedRaster.GetGeoTransform()
-            originX = transform[0]
-            originY = transform[3]
-            pixelWidth = transform[1]
-            pixelHeight = transform[5]
-        
-            maxHeight = -1
-            maxHeightIndices = [0.000000, 0.000000] 
+        cols = maskedRaster.RasterXSize
+        rows = maskedRaster.RasterYSize       
+        data = inputBand.ReadAsArray(0, 0, cols, rows)
+        transform = maskedRaster.GetGeoTransform()
+        originX = transform[0]
+        originY = transform[3]
+        pixelWidth = transform[1]
+        pixelHeight = transform[5]
 
-            for col in range(0, cols):
-                for row in range(0, rows):
-                    if data[row, col] != 0:
-                        pixelCenterX = originX + col * pixelWidth + 0.5 * pixelWidth
-                        pixelCenterY = originY + row * pixelHeight - 0.5 * pixelWidth
-                        demXOffset = int((pixelCenterX - demOriginX) / demPixelWidth)
-                        demYOffset = int((pixelCenterY - demOriginY) / demPixelHeight)
-                        heightValue = demBand.ReadAsArray(demXOffset, demYOffset, 1, 1)
+        #find DEM pixel with the highest value that intersects the landslide polygon:
+        maxHeight = -1
+        maxHeightIndices = [0.000000, 0.000000] 
+
+        for col in range(0, cols):
+           for row in range(0, rows):
+              if data[row, col] != 0 and data[row, col] != inputBand.GetNoDataValue():
+                 pixelCenterX = originX + col * pixelWidth + 0.5 * pixelWidth
+                 pixelCenterY = originY + row * pixelHeight - 0.5 * pixelWidth
+                 demXOffset = int((pixelCenterX - demOriginX) / demPixelWidth)
+                 demYOffset = int((pixelCenterY - demOriginY) / demPixelHeight)
+                 heightValue = demBand.ReadAsArray(demXOffset, demYOffset, 1, 1)
                         
-                        if heightValue > maxHeight:
-                            maxHeight = heightValue
-                            maxHeightIndices = [pixelCenterX, pixelCenterY]
+                 if heightValue > maxHeight:
+                    maxHeight = heightValue
+                    maxHeightIndices = [pixelCenterX, pixelCenterY]
+
+        QgsMessageLog.logMessage(str(maxHeightIndices[0]) + ';   ' + str(maxHeightIndices[1]), 'LandslideTools')
+
+        if maxHeight != -1: 
+           # create a polygon from the highest pixel:
+           pointLeftDown = QgsPoint(maxHeightIndices[0]-demPixelWidth*0.5, maxHeightIndices[1]-demPixelHeight*0.5)
+           pointLeftUp = QgsPoint(maxHeightIndices[0]-demPixelWidth*0.5, maxHeightIndices[1]+demPixelHeight*0.5)
+           pointRightUp = QgsPoint(maxHeightIndices[0]+demPixelWidth*0.5, maxHeightIndices[1]+demPixelHeight*0.5)
+           pointRightDown = QgsPoint(maxHeightIndices[0]+demPixelWidth*0.5, maxHeightIndices[1]-demPixelHeight*0.5)
+           rubberBand = QgsRubberBand( self.iface.mapCanvas(), QGis.Polygon )
+           rubberBand.addPoint(pointLeftDown)
+           rubberBand.addPoint(pointLeftUp)
+           rubberBand.addPoint(pointRightUp)
+           rubberBand.addPoint(pointRightDown)
+           pixelPolygonGeom = rubberBand.asGeometry()
+
+           #clip the highest pixel polygon with the landslide extent:
+           clippedPolygon = landslide.geometry().intersection(pixelPolygonGeom)
+           
+           #get the centroid of the clipped polygon:
+           centroid = clippedPolygon.centroid()
+              
+           highestPixel = QgsFeature()
+           highestPixel.setGeometry(centroid)
+           highestPixel.initAttributes(1)
+           highestPixel.setAttribute(0, landslide[self.ui.getSelectedIdField()])
+           highestPoints.dataProvider().addFeatures([highestPixel])
+
         
-            if maxHeight != -1:
-                highestPoint = QgsFeature()
-                point = QgsPoint(maxHeightIndices[0], maxHeightIndices[1])
-                highestPointGeom = QgsGeometry.fromPoint(point)
-                highestPoint.setGeometry(highestPointGeom)
-                highestPoint.initAttributes(1)
-                highestPoint.setAttribute(0, landslide[self.ui.getSelectedIdField()])
-                highestPoints.dataProvider().addFeatures([highestPoint])
-        
-        except:
-            count = 1
-        
-        singleFeatureVectorLayer = None
-        singleFeatureVectorLayerFileName = None
-        fet = None
-        command = None
-        pathToClippedRaster = None
-        maskedRaster = None
-        inputBand = None
-        data = None
+    singleFeatureVectorLayer = None
+    singleFeatureVectorLayerFileName = None
+    fet = None
+    command = None
+    pathToClippedRaster = None
+    maskedRaster = None
+    inputBand = None
+    data = None
         
     highestPoints.commitChanges()
     highestPoints.updateExtents()
     QgsMapLayerRegistry.instance().addMapLayer(highestPoints)
-    
+
     #close the window if button pressed:
     super(HighestPointsDialog, self).accept()
 

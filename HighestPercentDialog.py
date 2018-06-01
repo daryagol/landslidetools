@@ -65,10 +65,10 @@ class HighestPercentDialog(QtGui.QDialog):
     demPixelWidth = demTransform[1] # W-E pixel resolution
     demPixelHeight = demTransform[5] # N-S pixel resolution
 
-    # Prepare to resample the DEM to a resolution of 4-5 m. 5m is the maximum allowed resolution, and 1 is added on top of the result of integer division: 
-    numberOfPartsWidth = demPixelWidth // 5 + 1 
+    # Prepare to resample the DEM to a resolution of 4-5 m. 5m is the maximum allowed resolution and we divide by 4 to increase the number of parts: 
+    numberOfPartsWidth = abs(demPixelWidth) // 4
     newResolutionWidth = demPixelWidth / numberOfPartsWidth
-    numberOfPartsHeight = demPixelHeight // 5 + 1
+    numberOfPartsHeight = abs(demPixelHeight) // 4
     newResolutionHeight = demPixelHeight / numberOfPartsHeight  
 
     highestPercent = QgsVectorLayer("Polygon?crs=" + landslides.crs().toWkt(), "Highest N percent", "memory")
@@ -102,8 +102,23 @@ class HighestPercentDialog(QtGui.QDialog):
         fet.setGeometry(landslide.geometry())
         singleFeatureVectorLayer.dataProvider().addFeatures([fet])
         QgsVectorFileWriter.writeAsVectorFormat(singleFeatureVectorLayer, singleFeatureVectorLayerFileName, "CP1250", None, "ESRI Shapefile")
+
+        # get the boundaries to correctly crop the dem layer without shifts:
+        # code from: https://gis.stackexchange.com/questions/186491/gdalwarp-causing-shift-in-pixels?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+        singleFeatureLayerOgr = ogr.Open(singleFeatureVectorLayerFileName)
+        layerOgr = singleFeatureLayerOgr.GetLayer(0)
+        layerOgr.ResetReading()
+        singleFeatureOgr = layerOgr.GetNextFeature()
+        geometryOgr = singleFeatureOgr.GetGeometryRef()
+        minx, maxx, miny, maxy = geometryOgr.GetEnvelope()
+        # compute the pixel-aligned bounding box (larger than the feature's bbox)
+        left = minx - (minx - demOriginX) % demPixelWidth
+        right = maxx + (demPixelWidth - ((maxx - demOriginX) % demPixelWidth))
+        bottom = miny + (demPixelHeight - ((miny - demOriginY) % demPixelHeight))
+        top = maxy - (maxy - demOriginY) % demPixelHeight
     
-        command = 'gdalwarp -overwrite -q -cutline ' + singleFeatureVectorLayerFileName + ' -tr ' + str(newResolutionWidth) + ' ' + str(newResolutionHeight) + ' -of GTiff ' + demPath + ' ' + intermediateResultsFolderName + 'rasterized.tif -wo CUTLINE_ALL_TOUCHED=TRUE -crop_to_cutline' 
+        command = 'gdalwarp -overwrite -q -cutline ' + singleFeatureVectorLayerFileName + ' -tr ' + str(newResolutionWidth) + ' ' + str(newResolutionHeight) + ' -of GTiff ' + demPath + ' ' + intermediateResultsFolderName + 'rasterized.tif -wo CUTLINE_ALL_TOUCHED=TRUE -te ' + str(left) + ' ' + str(bottom) + ' ' + str(right) + ' ' + str(top)#-crop_to_cutline' 
+        #rasterized.tif is optional, just to see how the original DEM pixels compare with the down-sampled ones
         os.system(command)
         command = 'gdalwarp -overwrite -q -cutline ' + singleFeatureVectorLayerFileName + ' -tr ' + str(newResolutionWidth) + ' ' + str(newResolutionHeight) + ' -of GTiff ' + intermediateResultsFolderName + 'rasterized.tif ' + intermediateResultsFolderName + 'rasterized2.tif' 
         os.system(command)
