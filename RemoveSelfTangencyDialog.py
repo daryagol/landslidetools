@@ -55,7 +55,7 @@ class RemoveSelfTangencyDialog(QtGui.QDialog):
     resultLayer.dataProvider().addAttributes(landslides.dataProvider().fields())
     resultLayer.updateFields()
 
-    #find self-tangent polygons:
+    #1. Find self-tangent polygons:
     for landslide in landslides.getFeatures():
        isMultipart = False
        geom = landslide.geometry()
@@ -64,21 +64,21 @@ class RemoveSelfTangencyDialog(QtGui.QDialog):
           isMultipart = True
        else:
           parts = [ geom.asPolygon() ]
+       allRings = [] #will be used in step 2
        for part in parts:
           for ring in part:
+             allRings.append(ring) #will be used in step 2
              coordinatePairs = [] # list with all coordinate pairs of a ring
              for i in range (0, len(ring)-1): #-1 because the first and last vertex are the same
                 vertex = ring[i]
                 found = False
                 for coordPair in coordinatePairs:
                    if vertex[0] == coordPair[0] and vertex[1] == coordPair[1]:
-                      QgsMessageLog.logMessage("found", 'Landslide Tools')
                       found = True
                       indexPrev = (i + len(ring)-1 - 1) % (len(ring)-1) #index of the previous vertex
                       indexNext = (i + len(ring)-1 + 1) % (len(ring)-1) #index of the next vertex
                       vertexPrev = ring[indexPrev]
                       vertexNext = ring[indexNext]
-                      QgsMessageLog.logMessage('this: ' + str(vertex[0]) + " " + str(vertex[1])+ ';   prev: ' + str(vertexPrev[0]) + " " + str(vertexPrev[1]) + ';   next: ' + str(vertexNext[0]) + " " + str(vertexNext[1]), 'Landslide Tools')
                       if vertexPrev[0] + vertexNext[0] - 2 * vertex[0] > 0:
                          vertex.setX(vertex[0] + 0.1)
                       else:
@@ -86,15 +86,42 @@ class RemoveSelfTangencyDialog(QtGui.QDialog):
                       if vertexPrev[1] + vertexNext[1] - 2 * vertex[1] > 0:
                          vertex.setY(vertex[1] + 0.1)
                       else: 
-                         vertex.setY(vertex[1] - 0.1)
-                      QgsMessageLog.logMessage('this: ' + str(part[0][i][0]) + " " + str(part[0][i][1])+ ';   prev: ' + str(vertexPrev[0]) + " " + str(vertexPrev[1]) + ';   next: ' + str(vertexNext[0]) + " " + str(vertexNext[1]), 'Landslide Tools')
-
-
+                         vertex.setY(vertex[1] - 0.1)                      
                       
                 if found == False:
                    coordinatePairs.append(vertex)
 
 
+       #2. Correct interior rings that touch exterior rings:
+       for ring1 in allRings:
+          for ring2 in allRings:
+             if ring1 is not ring2:
+                found = False 
+                #records if a common point has already been found. Points are moved starting from the second
+                for i1 in range (0, len(ring1)-1): #-1 because the first and last vertex are the same
+                   for i2 in range(0, len(ring2)-1) :
+                      vertex1 = ring1[i1]
+                      vertex2 = ring2[i2]
+                      if vertex1[0] == vertex2[0] and vertex1[1] == vertex2[1]:
+                         vertexPrev1 = ring1[(i1 + len(ring1)-1 - 1) % (len(ring1) - 1)]
+                         vertexPrev2 = ring2[(i2 + len(ring2)-1 - 1) % (len(ring2) - 1)]
+                         vertexNext1 = ring1[(i1 + len(ring1)-1 + 1) % (len(ring1) - 1)]
+                         vertexNext2 = ring2[(i2 + len(ring2)-1 + 1) % (len(ring2) - 1)]
+                         if (vertexPrev1[0]!=vertexPrev2[0] and vertexPrev1[1]!=vertexPrev2[1] and vertexNext1[0]!=vertexNext2[0] and vertexNext1[1]!=vertexNext2[1]) or (vertexPrev1[0]!=vertexNext2[0] and vertexPrev1[1]!=vertexNext2[1] and vertexNext1[0]!=vertexPrev2[0] and vertexNext1[1]!=vertexPrev2[1]):
+                            #if we are here, then two rings touch only in one point
+                            if found:
+                               if vertexPrev1[0] + vertexNext1[0] - 2 * vertex1[0] > 0:
+                                  vertex1.setX(vertex1[0] + 0.1)
+                               else:
+                                  vertex1.setX(vertex1[0] - 0.1)
+                               if vertexPrev1[1] + vertexNext1[1] - 2 * vertex1[1] > 0:
+                                  vertex1.setY(vertex1[1] + 0.1)
+                               else: 
+                                  vertex1.setY(vertex1[1] - 0.1)
+                            else: #if this is only the first common point found:
+                               found = True
+
+       # Now save the resulting polygon in the new layer:
        if isMultipart:
           newGeometry = QgsGeometry.fromMultiPolygon(parts)
        else:
@@ -105,8 +132,8 @@ class RemoveSelfTangencyDialog(QtGui.QDialog):
        resultLayer.dataProvider().addFeatures([newFeature])
 
 
-
 #https://gis.stackexchange.com/questions/182121/counting-number-of-vertices-of-object-on-vector-layer-pyqgis?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+
     
     resultLayer.commitChanges()
     resultLayer.updateExtents()

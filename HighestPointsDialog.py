@@ -148,7 +148,6 @@ class HighestPointsDialog(QtGui.QDialog):
                     maxHeight = heightValue
                     maxHeightIndices = [pixelCenterX, pixelCenterY]
 
-        QgsMessageLog.logMessage(str(maxHeightIndices[0]) + ';   ' + str(maxHeightIndices[1]), 'LandslideTools')
 
         if maxHeight != -1: 
            # create a polygon from the highest pixel:
