@@ -117,7 +117,7 @@ class HighestPercentDialog(QtGui.QDialog):
         bottom = miny + (demPixelHeight - ((miny - demOriginY) % demPixelHeight))
         top = maxy - (maxy - demOriginY) % demPixelHeight
     
-        command = 'gdalwarp -overwrite -q -cutline ' + singleFeatureVectorLayerFileName + ' -tr ' + str(newResolutionWidth) + ' ' + str(newResolutionHeight) + ' -of GTiff ' + demPath + ' ' + intermediateResultsFolderName + 'rasterized.tif -wo CUTLINE_ALL_TOUCHED=TRUE -te ' + str(left) + ' ' + str(bottom) + ' ' + str(right) + ' ' + str(top)#-crop_to_cutline' 
+        command = 'gdalwarp -overwrite -q -cutline ' + singleFeatureVectorLayerFileName + ' -tr ' + str(newResolutionWidth) + ' ' + str(newResolutionHeight) + ' -of GTiff ' + demPath + ' ' + intermediateResultsFolderName + 'rasterized.tif -wo CUTLINE_ALL_TOUCHED=TRUE -te ' + str(left) + ' ' + str(bottom) + ' ' + str(right) + ' ' + str(top)#-crop_to_cutline' 4
         #rasterized.tif is optional, just to see how the original DEM pixels compare with the down-sampled ones
         os.system(command)
         command = 'gdalwarp -overwrite -q -cutline ' + singleFeatureVectorLayerFileName + ' -tr ' + str(newResolutionWidth) + ' ' + str(newResolutionHeight) + ' -of GTiff ' + intermediateResultsFolderName + 'rasterized.tif ' + intermediateResultsFolderName + 'rasterized2.tif' 
@@ -150,7 +150,8 @@ class HighestPercentDialog(QtGui.QDialog):
                     if data[row, col] <= cutOffValue and cutOffValue != pixelList[0]:
                         data[row, col] = inputBand.GetNoDataValue()
                     else: #remove 'else' to keep original raster values
-                        data[row, col] = 1
+                        if data[row, col] != inputBand.GetNoDataValue():
+                           data[row, col] = 1
 
             # Write the raster with N% highest pixels:
             driver = gdal.GetDriverByName("GTiff")
