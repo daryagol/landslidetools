@@ -40,7 +40,6 @@ class Ui_PolygonLength(object):
     landslideCombobox = None
     idCombobox = None
     demCombobox = None
-    outsideCheckbox = None
     dialog = None
     
     def setupUi(self, PolygonLengthDialog):
@@ -97,11 +96,6 @@ class Ui_PolygonLength(object):
         horizontalLayoutDem.addWidget(selectButtonDem)
         mainLayout.addLayout(horizontalLayoutDem)  
         
-        # parameter whether the highest point may be outside the landslide polygons
-        horizontalLayoutOutside = QtGui.QHBoxLayout()
-        self.outsideCheckbox = QtGui.QCheckBox("Allow highest points outside the landslide polygon")
-        horizontalLayoutOutside.addWidget(self.outsideCheckbox)
-        mainLayout.addLayout(horizontalLayoutOutside)
         
 	# add a dummy label for a better styling:          
         dummyLabel = QtGui.QLabel("", PolygonLengthDialog)
@@ -161,18 +155,14 @@ class Ui_PolygonLength(object):
       return self.idCombobox.currentText()
 	 
     def getSelectedDemLayer(self):
-	text = self.demCombobox.currentText()
-	demLayer = None
-	if text.endswith(".tif") or text.endswith(".tiff") or text.endswith(".img") or text.endswith(".gif") or text.endswith(".bmp"):
-	  demLayer = gdal.Open(text)	  
-	else:
-	  openLayers = self.dialog.getOpenMapLayers()
-	  for layer in openLayers.values():
-	    if (layer.name() == text):
-	      path = layer.dataProvider().dataSourceUri()
-	      demLayer = gdal.Open(path)
-	return demLayer
-      
-    def getOutsideCheckbox(self):
-	return self.outsideCheckbox
+      path = None
+      text = self.demCombobox.currentText()
+      if text.endswith(".tif") or text.endswith(".tiff") or text.endswith(".img") or text.endswith(".gif") or text.endswith(".bmp"):
+         path = text
+      else:
+	     openLayers = self.dialog.getOpenMapLayers()
+	     for layer in openLayers.values():
+	        if (layer.name() == text):
+	           path = layer.dataProvider().dataSourceUri()
+      return path
       

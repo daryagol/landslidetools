@@ -143,15 +143,24 @@ class HighestPercentDialog(QtGui.QDialog):
 
             pixelList.sort()
             cutOffValue = pixelList[-len(pixelList)//int(self.ui.getPortionField())] 
-
+            # In theory, the top N percent do not include the lower interval boundary (i.e. the cut-off value itself). 
+            # In practice, usually multiple pixels will have the cut-off value. 
+            # If the cut-off value is not the highest elevation within the landslide, then the resulting polygon will actually be smaller than N percent. 
+            # If the cut-off value is the highest elevation, then we should artificially include the cut-off value into the result, 
+            # because otherwise we would be getting a polygon whose area==0. 
+            # In this case, the resuling polygon will be larger than N percent, sometimes the whole landslide.
             
             for col in range(0, cols):
                 for row in range (0, rows):
-                    if data[row, col] <= cutOffValue and cutOffValue != pixelList[0]:
-                        data[row, col] = inputBand.GetNoDataValue()
-                    else: #remove 'else' to keep original raster values
-                        if data[row, col] != inputBand.GetNoDataValue():
-                           data[row, col] = 1
+                   if data[row, col] != inputBand.GetNoDataValue() and data[row, col] > cutOffValue:
+                      data[row, col] = 1
+                   elif data[row, col] != inputBand.GetNoDataValue() and data[row, col] < cutOffValue:
+                      data[row, col] = inputBand.GetNoDataValue()
+                   elif data[row, col] != inputBand.GetNoDataValue() and data[row, col] == cutOffValue and pixelList[-1] == cutOffValue:
+                      data[row, col] = 1
+                   else: #i.e. when data[row, col] == cutOffValue and pixelList[-1] != cutOffValue
+                      data[row, col] = inputBand.GetNoDataValue()
+
 
             # Write the raster with N% highest pixels:
             driver = gdal.GetDriverByName("GTiff")

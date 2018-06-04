@@ -54,7 +54,10 @@ class PolygonLengthDialog(QtGui.QDialog):
   def accept(self):    
 
     landslides = self.ui.getSelectedLandslideLayer()
-    dem = self.ui.getSelectedDemLayer()
+    demPath = self.ui.getSelectedDemLayer()
+    if demPath == None: 
+       return
+    dem = gdal.Open(demPath)
     if landslides is None or dem is None:
 	 return
     demBand = dem.GetRasterBand(1)
@@ -102,92 +105,103 @@ class PolygonLengthDialog(QtGui.QDialog):
         fet.setGeometry(landslide.geometry())
         singleFeatureVectorLayer.dataProvider().addFeatures([fet])
         QgsVectorFileWriter.writeAsVectorFormat(singleFeatureVectorLayer, singleFeatureVectorLayerFileName, "CP1250", None, "ESRI Shapefile")
-    
-	outside = ' '
-	if self.ui.getOutsideCheckbox().isChecked():
-	  outside = ' -at '
 
-        command = 'gdal_rasterize' + outside + '-burn 1 -tr ' + str(demPixelWidth) + ' ' + str(demPixelHeight) + ' ' + singleFeatureVectorLayerFileName + ' ' + intermediateResultsFolderName + 'rasterized.tif'
-	os.system(command)
+        # get the boundaries to correctly crop the dem layer without shifts:
+        # code from: https://gis.stackexchange.com/questions/186491/gdalwarp-causing-shift-in-pixels?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+        singleFeatureLayerOgr = ogr.Open(singleFeatureVectorLayerFileName)
+        layerOgr = singleFeatureLayerOgr.GetLayer(0)
+        layerOgr.ResetReading()
+        singleFeatureOgr = layerOgr.GetNextFeature()
+        geometryOgr = singleFeatureOgr.GetGeometryRef()
+        minx, maxx, miny, maxy = geometryOgr.GetEnvelope()
+        # compute the pixel-aligned bounding box (larger than the feature's bbox)
+        left = minx - (minx - demOriginX) % demPixelWidth
+        right = maxx + (demPixelWidth - ((maxx - demOriginX) % demPixelWidth))
+        bottom = miny + (demPixelHeight - ((miny - demOriginY) % demPixelHeight))
+        top = maxy - (maxy - demOriginY) % demPixelHeight
+
+        command = 'gdalwarp -overwrite -q -cutline ' + singleFeatureVectorLayerFileName + ' -tr ' + str(demPixelWidth) + ' ' + str(demPixelHeight) + ' -of GTiff ' + demPath + ' ' + intermediateResultsFolderName + 'rasterized.tif -wo CUTLINE_ALL_TOUCHED=TRUE -te ' + str(left) + ' ' + str(bottom) + ' ' + str(right) + ' ' + str(top)# -crop_to_cutline' 
+        os.system(command)
 
         pathToClippedRaster = intermediateResultsFolderName + "rasterized.tif"
         maskedRaster = gdal.Open(pathToClippedRaster)
-        try:
-            inputBand = maskedRaster.GetRasterBand(1)
-        
-            cols = maskedRaster.RasterXSize
-            rows = maskedRaster.RasterYSize       
-            data = inputBand.ReadAsArray(0, 0, cols, rows)
-            transform = maskedRaster.GetGeoTransform()
-            originX = transform[0]
-            originY = transform[3]
-            pixelWidth = transform[1]
-            pixelHeight = transform[5]
-        
-            maxHeight = -1
-            minHeight = 10000
-            maxHeightIndices = [0.0, 0.0] 
-            minHeightIndices = [0.0, 0.0]
-        
-            for col in range(0, cols):
-                for row in range(0, rows):
-                    if data[row, col] == 1:
-                        pixelCenterX = originX + col * pixelWidth + 0.5 * pixelWidth
-                        pixelCenterY = originY + row * pixelHeight - 0.5 * pixelWidth
-                        demXOffset = int((pixelCenterX - demOriginX) / demPixelWidth)
-                        demYOffset = int((pixelCenterY - demOriginY) / demPixelHeight)
-                        heightValue = demBand.ReadAsArray(demXOffset, demYOffset, 1, 1)
-                        if heightValue > maxHeight:
-                            maxHeight = heightValue
-                            maxHeightIndices = [pixelCenterX, pixelCenterY]
-                        if heightValue < minHeight:
-                            minHeight = heightValue
-                            minHeightIndices = [pixelCenterX, pixelCenterY]
-        
-            highestQgsPoint = None
-            lowestQgsPoint = None
-            lengthLine = None
-        
-            if maxHeight != -1:     
-                highestPoint = QgsFeature()
-                highestQgsPoint = QgsPoint(maxHeightIndices[0], maxHeightIndices[1])
-                highestPointGeom = QgsGeometry.fromPoint(highestQgsPoint)
-                highestPoint.setGeometry(highestPointGeom)
-                highestPoint.initAttributes(1)
-                highestPoint.setAttribute(0, landslide[self.ui.getSelectedIdField()])
-                highestPoints.dataProvider().addFeatures([highestPoint])
-            if minHeight != 10000:
-                lowestPoint = QgsFeature()
-                lowestQgsPoint = QgsPoint(minHeightIndices[0], minHeightIndices[1])
-                lowestPointGeom = QgsGeometry.fromPoint(lowestQgsPoint)
-                lowestPoint.setGeometry(lowestPointGeom)
-                lowestPoint.initAttributes(1)
-                lowestPoint.setAttribute(0, landslide[self.ui.getSelectedIdField()])
-                lowestPoints.dataProvider().addFeatures([lowestPoint])  
-            
-            if highestQgsPoint is not None and lowestQgsPoint is not None:
-                initialSegment = QgsGeometry.fromPolyline([highestQgsPoint, lowestQgsPoint])
-                finalListOfPoints = self.processSegment(landslide, highestQgsPoint, lowestQgsPoint)
-                finalResultSegment = QgsGeometry.fromPolyline(finalListOfPoints)
-                # temporary length lines, later to be substituted by lengthLine method result
-                lengthLine = QgsFeature()  
-                lengthLine.setGeometry(finalResultSegment)
-                lengthLine.initAttributes(2)
-                lengthLine.setAttribute(0, landslide[self.ui.getSelectedIdField()])
-                lengthLine.setAttribute(1, landslide.geometry().length())
-                lengthLines.dataProvider().addFeatures([lengthLine])
 
-        except:
-            count = 1
+        #try:
+        inputBand = maskedRaster.GetRasterBand(1)
         
-        singleFeatureVectorLayer = None
-        singleFeatureVectorLayerFileName = None
-        fet = None
-        command = None
-        pathToClippedRaster = None
-        maskedRaster = None
-        inputBand = None
-        data = None
+        cols = maskedRaster.RasterXSize
+        rows = maskedRaster.RasterYSize       
+        data = inputBand.ReadAsArray(0, 0, cols, rows)
+        transform = maskedRaster.GetGeoTransform()
+        originX = transform[0]
+        originY = transform[3]
+        pixelWidth = transform[1]
+        pixelHeight = transform[5]
+        
+        maxHeight = -1
+        minHeight = 10000
+        maxHeightIndices = [0.0, 0.0] 
+        minHeightIndices = [0.0, 0.0]
+        
+        for col in range(0, cols):
+           for row in range(0, rows):
+              if data[row, col] != inputBand.GetNoDataValue():
+                 pixelCenterX = originX + col * pixelWidth + 0.5 * pixelWidth
+                 pixelCenterY = originY + row * pixelHeight - 0.5 * pixelWidth
+                 demXOffset = int((pixelCenterX - demOriginX) / demPixelWidth)
+                 demYOffset = int((pixelCenterY - demOriginY) / demPixelHeight)
+                 heightValue = demBand.ReadAsArray(demXOffset, demYOffset, 1, 1)
+                 if heightValue > maxHeight:
+                    maxHeight = heightValue
+                    maxHeightIndices = [pixelCenterX, pixelCenterY]
+                 if heightValue < minHeight:
+                    minHeight = heightValue
+                    minHeightIndices = [pixelCenterX, pixelCenterY]
+        
+        highestPoint = None
+        lowestPoint = None
+        lengthLine = None
+        if maxHeight != -1:     
+           # create the highest point from highest pixel:
+           highestPoint = self.createPointFromPixel(maxHeightIndices[0], maxHeightIndices[1], pixelWidth, pixelHeight, landslide)
+           highestPointFeature = QgsFeature()
+           highestPointFeature.setGeometry(highestPoint)
+           highestPointFeature.initAttributes(1)
+           highestPointFeature.setAttribute(0, landslide[self.ui.getSelectedIdField()])
+           highestPoints.dataProvider().addFeatures([highestPointFeature])
+
+        if minHeight != 10000:
+           # create the lowest point from lowest pixel:
+           lowestPoint = self.createPointFromPixel(minHeightIndices[0], minHeightIndices[1], pixelWidth, pixelHeight, landslide)
+           lowestPointFeature = QgsFeature()
+           lowestPointFeature.setGeometry(lowestPoint)
+           lowestPointFeature.initAttributes(1)
+           lowestPointFeature.setAttribute(0, landslide[self.ui.getSelectedIdField()])
+           lowestPoints.dataProvider().addFeatures([lowestPointFeature])
+            
+        if highestPoint is not None and lowestPoint is not None:
+           #initialSegment = QgsGeometry.fromPolyline([highestPoint, lowestPoint])
+           finalListOfPoints = self.processSegment(landslide, highestPoint.asPoint(), lowestPoint.asPoint())
+           finalResultSegment = QgsGeometry.fromPolyline(finalListOfPoints)
+           # temporary length lines, later to be substituted by lengthLine method result
+           lengthLine = QgsFeature()  
+           lengthLine.setGeometry(finalResultSegment)
+           lengthLine.initAttributes(2)
+           lengthLine.setAttribute(0, landslide[self.ui.getSelectedIdField()])
+           lengthLine.setAttribute(1, landslide.geometry().length())
+           lengthLines.dataProvider().addFeatures([lengthLine])
+
+        #except:
+        #    count = 1
+        
+    singleFeatureVectorLayer = None
+    singleFeatureVectorLayerFileName = None
+    fet = None
+    command = None
+    pathToClippedRaster = None
+    maskedRaster = None
+    inputBand = None
+    data = None
      
     highestPoints.commitChanges()
     lowestPoints.commitChanges()
@@ -233,7 +247,7 @@ class PolygonLengthDialog(QtGui.QDialog):
       # 4) if there are too many intersections, split the line:
       # solution from https://www.easycalculation.com/analytical/perpendicular-bisector-line.php
       if numberOfIntersections > allowedNumberOfIntersections or not lsPolygon.geometry().contains(QgsPoint((startPoint.x() + endPoint.x()) / 2, (startPoint.y() + endPoint.y()) / 2)):
-          #construct the perpendicular bisector:
+          #construct the perpendicular bisector:	
           perpendicularBisector = self.getPerpendicularBisector(startPoint, endPoint)
           
           # 4e: find an intersection of the perpendicular bisector with the landslide polygon:
@@ -294,7 +308,7 @@ class PolygonLengthDialog(QtGui.QDialog):
       if startPoint.x()==endPoint.x():
           return QgsGeometry.fromPolyline([QgsPoint(0.0, yMid), QgsPoint(600000.0, yMid)])
       if startPoint.y()==endPoint.y():
-          return QgsGeometry.fromPolyline([QgsPoint(xMid, 0.0), QgsPoint(xMid, 6000000.0)])     
+          return QgsGeometry.fromPolyline([QgsPoint(xMid, 0.0),	QgsPoint(xMid, 6000000.0)])     
       initialSlope = (endPoint.y() - startPoint.y()) / (endPoint.x() - startPoint.x())    
       # 3) calculate the slope of the perpendicular bisector:
       perpendicularSlope = (-1.0) / initialSlope    
@@ -312,3 +326,25 @@ class PolygonLengthDialog(QtGui.QDialog):
       layers = QgsMapLayerRegistry.instance().mapLayers()
       return layers
     
+  # x and y are coordinates of the pixel center, width and height are the pixel dimensions
+  # Returns a QgsPoint
+  def createPointFromPixel(self, x, y, width, height, landslide):
+      # create a polygon from the highest pixel:
+      pointLeftDown = QgsPoint(x-width*0.5, y-height*0.5)
+      pointLeftUp = QgsPoint(x-width*0.5, y+height*0.5)
+      pointRightUp = QgsPoint(x+width*0.5, y+height*0.5)
+      pointRightDown = QgsPoint(x+width*0.5, y-height*0.5)
+      rubberBand = QgsRubberBand( self.iface.mapCanvas(), QGis.Polygon )
+      rubberBand.addPoint(pointLeftDown)
+      rubberBand.addPoint(pointLeftUp)
+      rubberBand.addPoint(pointRightUp)
+      rubberBand.addPoint(pointRightDown)
+      pixelPolygonGeom = rubberBand.asGeometry()
+
+      #clip the highest pixel polygon with the landslide extent:
+      clippedPolygon = landslide.geometry().intersection(pixelPolygonGeom)
+           
+      #get the centroid of the clipped polygon:
+      centroid = clippedPolygon.centroid()
+      return  centroid
+              
